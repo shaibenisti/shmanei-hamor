@@ -11,12 +11,15 @@ permissions:
   pages: write
   id-token: write
 
-# Only one concurrent deployment.
+# Only one concurrent Pages deployment; let an in-flight run finish.
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
+  # ----------------------------------------------------------------------
+  # Build: produces exactly ONE "github-pages" artifact from ./out
+  # ----------------------------------------------------------------------
   build:
     runs-on: ubuntu-latest
     steps:
@@ -29,6 +32,9 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
       - name: Install dependencies
         run: npm ci
 
@@ -38,11 +44,15 @@ jobs:
           NEXT_PUBLIC_BASE_PATH: /shmanei-hamor
         run: npm run build
 
-      - name: Upload artifact
+      # The ONLY artifact upload in this workflow.
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
 
+  # ----------------------------------------------------------------------
+  # Deploy: consumes the single artifact above. The ONLY deploy step.
+  # ----------------------------------------------------------------------
   deploy:
     needs: build
     runs-on: ubuntu-latest
