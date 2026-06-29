@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-cream: #f7f1e8;
+    --color-gold: #c6a15b;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-cream);
+    color: #2f2a25;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Headings lean on the serif display face for a luxurious feel. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-frank), Georgia, serif;
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-8;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-deep-green px-6 py-3 text-sm font-medium text-cream shadow-soft transition-all duration-300 hover:bg-[#445c40] hover:shadow-card active:scale-[0.98];
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-gold/70 bg-transparent px-6 py-3 text-sm font-medium text-brown transition-all duration-300 hover:bg-gold/10 hover:border-gold active:scale-[0.98];
+  }
+
+  .btn-whatsapp {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-deep-green px-5 py-2.5 text-sm font-medium text-cream transition-all duration-300 hover:bg-[#445c40] active:scale-[0.98];
+  }
+
+  .link-underline {
+    @apply relative transition-colors duration-300 after:absolute after:bottom-0 after:right-0 after:h-px after:w-0 after:bg-gold after:transition-all after:duration-300 hover:text-gold hover:after:w-full;
+  }
+}
+
+/* Subtle textured backdrop used across hero / CTA sections. */
+.bg-soft-radial {
+  background-image: radial-gradient(
+      circle at 20% 20%,
+      rgba(198, 161, 91, 0.12),
+      transparent 45%
+    ),
+    radial-gradient(circle at 85% 0%, rgba(143, 165, 140, 0.18), transparent 40%);
+}
