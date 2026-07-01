@@ -7,22 +7,10 @@ import TreatmentPreview from "@/components/TreatmentPreview";
 import { products } from "@/data/products";
 import { site } from "@/data/site";
 
-const values = [
-  {
-    icon: "🌿",
-    title: "מצמחי מרפא",
-    text: "שמנים וחליטות המבוססים על צמחי מרפא טבעיים, בקפידה ובאיכות.",
-  },
-  {
-    icon: "🤍",
-    title: "בעבודת יד",
-    text: "כל מוצר נרקח בעבודת יד, באהבה ובתשומת לב לכל פרט.",
-  },
-  {
-    icon: "🕊️",
-    title: "רוגע ושלווה",
-    text: "מוצרים וטיפולים המזמינים תחושת רוגע, שלווה וחיבור לגוף ולנפש.",
-  },
+const trust = [
+  "רקיחה בעבודת יד",
+  "צמחי מרפא טבעיים",
+  "טיפולי מגע לנשים",
 ];
 
 export default function HomePage() {
@@ -32,22 +20,21 @@ export default function HomePage() {
     <>
       <Hero />
 
-      {/* Brand values */}
-      <section className="container-page py-16 md:py-20">
-        <div className="grid gap-6 sm:grid-cols-3">
-          {values.map((v) => (
-            <div
-              key={v.title}
-              className="rounded-3xl border border-gold/15 bg-white p-7 text-center shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-soft"
-            >
-              <div className="text-4xl">{v.icon}</div>
-              <h3 className="mt-4 font-serif text-xl font-bold text-deep-green">
-                {v.title}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-ink/70">
-                {v.text}
-              </p>
-            </div>
+      {/* Trust strip */}
+      <section className="border-y border-gold/15">
+        <div className="container-page flex flex-col items-center justify-center gap-3 py-6 text-center sm:flex-row sm:gap-0">
+          {trust.map((item, i) => (
+            <span key={item} className="flex items-center">
+              {i > 0 && (
+                <span
+                  aria-hidden
+                  className="mx-5 hidden h-4 w-px bg-gold/30 sm:block"
+                />
+              )}
+              <span className="font-serif text-sm tracking-wide text-deep-green md:text-base">
+                {item}
+              </span>
+            </span>
           ))}
         </div>
       </section>
