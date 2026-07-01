@@ -7,37 +7,12 @@ import TreatmentPreview from "@/components/TreatmentPreview";
 import { products } from "@/data/products";
 import { site } from "@/data/site";
 
-const trust = [
-  "רקיחה בעבודת יד",
-  "צמחי מרפא טבעיים",
-  "טיפולי מגע לנשים",
-];
-
 export default function HomePage() {
   const featured = products.slice(0, 3);
 
   return (
     <>
       <Hero />
-
-      {/* Trust strip */}
-      <section className="border-y border-gold/15">
-        <div className="container-page flex flex-col items-center justify-center gap-3 py-6 text-center sm:flex-row sm:gap-0">
-          {trust.map((item, i) => (
-            <span key={item} className="flex items-center">
-              {i > 0 && (
-                <span
-                  aria-hidden
-                  className="mx-5 hidden h-4 w-px bg-gold/30 sm:block"
-                />
-              )}
-              <span className="font-serif text-sm tracking-wide text-deep-green md:text-base">
-                {item}
-              </span>
-            </span>
-          ))}
-        </div>
-      </section>
 
       {/* Featured products */}
       <section className="container-page py-12 md:py-16">
