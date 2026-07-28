@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import SectionTitle from "@/components/SectionTitle";
+import GiftVoucher from "@/components/GiftVoucher";
 import { asset, site, whatsappLink } from "@/data/site";
 
 export const metadata: Metadata = {
@@ -14,7 +15,6 @@ const details = [
   { label: "משך הטיפול", value: "שעה" },
   { label: "מחיר", value: "240 ₪" },
   { label: "מיקום", value: site.location },
-  { label: "קביעת תור", value: `טלפון / וואטסאפ ${site.phoneDisplay}` },
 ];
 
 export default function TreatmentsPage() {
@@ -61,20 +61,6 @@ export default function TreatmentsPage() {
               לצרכים האישיים של כל אישה. השמנים המשמשים בטיפול נרקחים בעבודת יד
               מצמחי מרפא טבעיים.
             </p>
-
-            <div className="mt-8 flex flex-wrap gap-3">
-              <a
-                href={message}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary"
-              >
-                קביעת תור בוואטסאפ
-              </a>
-              <a href={`tel:${site.phone}`} className="btn-outline">
-                התקשרו: {site.phoneDisplay}
-              </a>
-            </div>
           </div>
 
           <aside className="lg:col-span-2">
@@ -95,6 +81,25 @@ export default function TreatmentsPage() {
                   </div>
                 ))}
               </dl>
+
+              <a
+                href={message}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary mt-7 w-full"
+              >
+                קביעת תור בוואטסאפ
+              </a>
+              <p className="mt-4 text-center text-sm text-ink/60">
+                או בטלפון{" "}
+                <a
+                  href={`tel:${site.phone}`}
+                  dir="ltr"
+                  className="link-underline font-medium text-brown"
+                >
+                  {site.phoneDisplay}
+                </a>
+              </p>
             </div>
           </aside>
         </div>
@@ -103,6 +108,8 @@ export default function TreatmentsPage() {
           {site.disclaimer}
         </p>
       </section>
+
+      <GiftVoucher />
     </>
   );
 }
