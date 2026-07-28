@@ -81,4 +81,14 @@ export const products: Product[] = [
     description:
       "ערכה טבעית הכוללת שמן לחלל הפה לצד חליטות צמחים להרגעה טבעית.",
   },
+  {
+    id: "hormonal-calm-oil",
+    name: "שמן רוגע הורמונלי",
+    category: "צמחי מרפא",
+    price: 52,
+    size: "30 מ״ל",
+    image: "/images/products/hormonal-calm-oil.png",
+    description:
+      "שמן טבעי מצמחי מרפא לשימוש חיצוני, מלווה בתחושת רוגע ושלווה כחלק משגרת טיפוח עדינה.",
+  },
 ];
