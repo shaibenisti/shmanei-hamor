@@ -30,7 +30,7 @@ export const products: Product[] = [
     size: "30 מ״ל",
     image: "/images/products/calming-oil.png",
     description:
-      "שמן טבעי המיועד לתחושת רוגע, שלווה ונינוחות כחלק משגרת טיפול טבעית.",
+      "שמן טבעי לשימוש חיצוני המיועד לתחושת רוגע, שלווה, הפחתת חרדה ושיפור השינה.",
   },
   {
     id: "face-oil",
@@ -69,7 +69,8 @@ export const products: Product[] = [
     price: 260,
     size: "50 מ״ל",
     image: "/images/products/deep-skin-oil.png",
-    description: "שמן טבעי לעור, מתאים לשגרת טיפוח ממוקדת ועדינה.",
+    description:
+      "שמן טבעי לעור הפועל בשלושה רבדים, הנפשי, הפנימי והחיצוני, לשימוש חיצוני בלבד",
   },
   {
     id: "mouth-oil-kit",
@@ -79,7 +80,7 @@ export const products: Product[] = [
     size: "שמן 10 מ״ל + חליטות",
     image: "/images/products/mouth-oil-kit.png",
     description:
-      "ערכה טבעית הכוללת שמן לחלל הפה לצד חליטות צמחים להרגעה טבעית.",
+      "ערכה טבעית הכוללת שמן למריחה בחלל הפה לניקוי, חיטוי והלבנת השיניים לצד חליטות צמחים להרגעה טבעית.",
   },
   {
     id: "hormonal-calm-oil",
