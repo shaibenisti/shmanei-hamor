@@ -6,7 +6,10 @@ export type Product = {
   name: string;
   category: string;
   price: number;
-  size: string;
+  /** Volume / contents. Omitted for products sold without a stated size. */
+  size?: string;
+  /** Scent blends the customer picks from before ordering, if any. */
+  scents?: string[];
   image: string;
   description: string;
 };
@@ -91,5 +94,15 @@ export const products: Product[] = [
     image: "/images/products/hormonal-calm-oil.png",
     description:
       "שמן טבעי מצמחי מרפא לשימוש חיצוני, תמצית לנשים כהכנה להריון עוזר לאיזון וחיזוק המערכת ההורמונלית בגוף",
+  },
+  {
+    id: "scent-diffuser",
+    name: "מפיץ ריח מצמחי מרפא",
+    category: "מפיצי ריח",
+    price: 120,
+    scents: ["תערובת בניחוח ורדים", "תערובת בניחוח יסמין"],
+    image: "/images/products/scent-diffuser.png",
+    description:
+      "מפיץ ריח בעבודת יד, המשלב תמציות ורכיבים ארומטיים מצמחי מרפא ליצירת אווירה נעימה, רכה ומזמינה בחלל. זמין בשתי תערובות ניחוח: ורדים ויסמין.",
   },
 ];

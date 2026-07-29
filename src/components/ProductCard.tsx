@@ -1,9 +1,20 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 import type { Product } from "@/data/products";
 import { asset, whatsappLink } from "@/data/site";
 
 export default function ProductCard({ product }: { product: Product }) {
-  const orderMessage = `שלום, אשמח להזמין את "${product.name}" (${product.size}) במחיר ${product.price} ₪ 🌿`;
+  // Products sold in more than one scent blend start on the first blend, so
+  // the order message is always complete even if nothing is clicked.
+  const [scent, setScent] = useState(product.scents?.[0]);
+
+  // The parenthetical carries the size, or the chosen blend for scented products.
+  const detail = scent ?? product.size;
+  const orderMessage = `שלום, אשמח להזמין את "${product.name}"${
+    detail ? ` (${detail})` : ""
+  } במחיר ${product.price} ₪ 🌿`;
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-3xl border border-gold/15 bg-white shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-soft">
@@ -25,13 +36,38 @@ export default function ProductCard({ product }: { product: Product }) {
           {product.name}
         </h3>
 
-        <div className="mt-2 flex items-center gap-2 text-sm text-ink/60">
-          <span>{product.size}</span>
-        </div>
+        {product.size && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-ink/60">
+            <span>{product.size}</span>
+          </div>
+        )}
 
         <p className="mt-3 flex-1 text-sm leading-relaxed text-ink/70">
           {product.description}
         </p>
+
+        {product.scents && (
+          <div className="mt-4">
+            <span className="text-xs font-medium text-ink/60">בחרי ניחוח</span>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {product.scents.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setScent(option)}
+                  aria-pressed={option === scent}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-300 active:scale-[0.98] ${
+                    option === scent
+                      ? "border-deep-green bg-deep-green text-cream"
+                      : "border-gold/40 text-brown hover:border-gold hover:bg-gold/10"
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-5 flex items-center justify-between gap-3 border-t border-gold/15 pt-4">
           <span className="text-lg font-bold text-brown">
