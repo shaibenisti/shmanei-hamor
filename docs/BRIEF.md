@@ -44,13 +44,28 @@ A production-quality Hebrew RTL marketing website for the aromatherapy brand
 src/
   app/            layout + 5 routes (page.tsx per folder)
   components/     Header, Footer, Hero, ProductCard, ProductGrid,
+                  ProductDetailDialog, BotanicalMark, GiftVoucher,
                   WhatsAppButton, SectionTitle, AboutPreview,
                   TreatmentPreview, ContactCard
-  data/           products.ts, site.ts
+  data/           products.ts, productDetails.ts, site.ts
 public/images/    products/ , about/ , treatments/
-docs/             BRIEF.md
+docs/             BRIEF.md, product-guides/ (source information sheets)
 .github/workflows deploy.yml (GitHub Pages)
 ```
+
+## Product information sheets (סגולות ושימוש)
+
+Products that ship with a printed information sheet get a second, quiet button
+on their card next to the WhatsApp order button. It opens `ProductDetailDialog`
+— a modal that expands out of the button (Web Animations API, no motion
+library), locks the page behind it, traps focus, closes on `Esc`, and falls back
+to a plain fade under `prefers-reduced-motion`.
+
+The Hebrew copy is transcribed verbatim into `src/data/productDetails.ts`, one
+entry per `Product.id`; a product without an entry simply has no button. Each
+entry carries its own accent colour, and sections render only when present, so a
+sheet with no אזהרות block never shows an empty heading. The original `.txt`
+sheets are kept, unread at runtime, in `docs/product-guides/`.
 
 ## Design tokens (Tailwind theme)
 

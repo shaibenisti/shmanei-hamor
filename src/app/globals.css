@@ -45,8 +45,21 @@
     @apply inline-flex items-center justify-center gap-2 rounded-full bg-deep-green px-5 py-2.5 text-sm font-medium text-cream transition-all duration-300 hover:bg-[#445c40] active:scale-[0.98];
   }
 
+  /* Quiet companion to .btn-whatsapp, for secondary actions on a card. */
+  .btn-soft {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-gold/40 bg-cream/60 px-5 py-2.5 text-sm font-medium text-brown transition-all duration-300 hover:border-gold hover:bg-gold/10 active:scale-[0.98];
+  }
+
   .link-underline {
     @apply relative transition-colors duration-300 after:absolute after:bottom-0 after:right-0 after:h-px after:w-0 after:bg-gold after:transition-all after:duration-300 hover:text-gold hover:after:w-full;
+  }
+}
+
+/* Staggered reveal inside the product detail sheet. The sheet's own open /
+   close motion is driven from JS, which checks the same preference. */
+@media (prefers-reduced-motion: reduce) {
+  .detail-reveal {
+    animation: none !important;
   }
 }
 
