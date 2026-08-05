@@ -16,6 +16,8 @@ export default function ProductCard({ product }: { product: Product }) {
   const sheet = getProductDetail(product.id);
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetButton = useRef<HTMLButtonElement>(null);
+  // The card is the surface the sheet grows out of, so the sheet measures it.
+  const cardRef = useRef<HTMLElement>(null);
 
   // The parenthetical carries the size, or the chosen blend for scented products.
   const detail = scent ?? product.size;
@@ -24,7 +26,10 @@ export default function ProductCard({ product }: { product: Product }) {
   } במחיר ${product.price} ₪ 🌿`;
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-3xl border border-gold/15 bg-white shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-soft">
+    <article
+      ref={cardRef}
+      className="group flex h-full flex-col overflow-hidden rounded-3xl border border-gold/15 bg-white shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-soft"
+    >
       <div className="relative aspect-square overflow-hidden bg-cream">
         <Image
           src={asset(product.image)}
@@ -114,6 +119,7 @@ export default function ProductCard({ product }: { product: Product }) {
         <ProductDetailDialog
           product={product}
           detail={sheet}
+          originRef={cardRef}
           triggerRef={sheetButton}
           onClose={() => setSheetOpen(false)}
         />

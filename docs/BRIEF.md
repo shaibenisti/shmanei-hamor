@@ -48,6 +48,7 @@ src/
                   WhatsAppButton, SectionTitle, AboutPreview,
                   TreatmentPreview, ContactCard
   data/           products.ts, productDetails.ts, site.ts
+  lib/            motion.ts (spring easings + surface geometry)
 public/images/    products/ , about/ , treatments/
 docs/             BRIEF.md, product-guides/ (source information sheets)
 .github/workflows deploy.yml (GitHub Pages)
@@ -56,10 +57,20 @@ docs/             BRIEF.md, product-guides/ (source information sheets)
 ## Product information sheets (סגולות ושימוש)
 
 Products that ship with a printed information sheet get a second, quiet button
-on their card next to the WhatsApp order button. It opens `ProductDetailDialog`
-— a modal that expands out of the button (Web Animations API, no motion
-library), locks the page behind it, traps focus, closes on `Esc`, and falls back
-to a plain fade under `prefers-reduced-motion`.
+on their card next to the WhatsApp order button. It opens `ProductDetailDialog`,
+which locks the page behind it, traps focus, closes on `Esc`, and falls back to a
+plain fade under `prefers-reduced-motion`.
+
+The sheet is not a modal that appears — it is the card itself, growing. On open
+the dialog measures the card and pins its own surface to that box, then springs
+`top / left / width / height / border-radius` to the sheet's geometry, so the
+corners interpolate and nothing is ever scaled or distorted. The content is
+frozen at the sheet's final size and centred behind `overflow: hidden`, so the
+growing surface reveals a page that is already laid out instead of re-wrapping
+text mid-flight. Opacity is used only to hand over from the card in the first
+frames and back to it in the last. Springs come from `src/lib/motion.ts`, which
+samples them into a CSS `linear()` easing — the browser drives every frame, and
+no motion library is needed.
 
 The Hebrew copy is transcribed verbatim into `src/data/productDetails.ts`, one
 entry per `Product.id`; a product without an entry simply has no button. Each

@@ -13,159 +13,284 @@ import { createPortal } from "react-dom";
 import type { Product } from "@/data/products";
 import { sheetBlessing, type DetailSection, type ProductDetail } from "@/data/productDetails";
 import { site } from "@/data/site";
+import {
+  prefersReducedMotion,
+  readSurface,
+  shrinkSurface,
+  spring,
+  surfaceKeyframe,
+  type Surface,
+  type SpringConfig,
+} from "@/lib/motion";
 import BotanicalMark from "./BotanicalMark";
 
-// Motion is deliberately asymmetric: the sheet unfolds slowly and settles,
-// then leaves quickly. Easings mirror the iOS sheet curves.
-const OPEN_MS = 560;
-const CLOSE_MS = 320;
-const REDUCED_MS = 120;
-const EASE_OUT = "cubic-bezier(0.32, 0.72, 0, 1)";
-const EASE_IN = "cubic-bezier(0.4, 0, 0.7, 1)";
+// The sheet is not a modal that appears — it is the product card itself,
+// growing. One surface animates its box and its corners from the card's
+// geometry to the sheet's; the card underneath hands over in the first frames
+// and takes over again at the end, so there is never a second element to see.
+
+/** Opening: under-damped, so the surface eases just past its size and settles. */
+const OPEN_SPRING: SpringConfig = { stiffness: 240, damping: 22.5 };
+/** Closing: critically damped — quick, no bounce on the way back to the card. */
+const CLOSE_SPRING: SpringConfig = { stiffness: 420, damping: 41 };
+
+/** Only ever applied to the backdrop, and to the hand-over at each end. */
+const HANDOVER_MS = 180;
+const CONTENT_IN_MS = 260;
+const CONTENT_OUT_MS = 150;
+const BACKDROP_MS = 420;
+const REDUCED_MS = 140;
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
-function prefersReducedMotion() {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** Freeze the page behind the sheet without letting the layout shift. */
+function lockPageScroll(): () => void {
+  const { body, documentElement: root } = document;
+  const gutter = window.innerWidth - root.clientWidth;
+  // In RTL the browser may park the scrollbar on the left.
+  const side =
+    root.getBoundingClientRect().left > 0 ? "paddingLeft" : "paddingRight";
+  const previous = { overflow: body.style.overflow, pad: body.style[side] };
+
+  body.style.overflow = "hidden";
+  if (gutter > 0) body.style[side] = `${gutter}px`;
+
+  return () => {
+    body.style.overflow = previous.overflow;
+    body.style[side] = previous.pad;
+  };
 }
 
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
-
 /**
- * Transform that parks the panel over the button that opened it, so the sheet
- * appears to grow out of the card instead of simply appearing.
+ * Take the surface out of the centring flow so its box can be animated, and
+ * freeze the content at the sheet's final size. Frozen content is the reason
+ * the morph reads as one surface: nothing inside reflows or re-wraps while the
+ * box changes — the growing surface simply reveals more of a page that is
+ * already laid out.
  */
-function collapsedTransform(panel: DOMRect, trigger: DOMRect | null) {
-  if (!trigger) return { origin: "50% 50%", transform: "scale(0.94)" };
+function pin(
+  surface: HTMLElement,
+  content: HTMLElement,
+  box: Surface,
+  sheet: Surface,
+) {
+  Object.assign(surface.style, {
+    position: "fixed",
+    top: `${box.top}px`,
+    left: `${box.left}px`,
+    width: `${box.width}px`,
+    height: `${box.height}px`,
+    // Explicit geometry must win over the layout classes, including while the
+    // spring is reaching past its target.
+    maxWidth: "none",
+    maxHeight: "none",
+    margin: "0",
+  });
+  Object.assign(content.style, {
+    position: "absolute",
+    top: "0",
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: `${sheet.width}px`,
+    height: `${sheet.height}px`,
+    maxHeight: "none",
+  });
+}
 
-  const triggerX = trigger.left + trigger.width / 2;
-  const triggerY = trigger.top + trigger.height / 2;
-  // The growth point, clamped to the panel so an off-screen trigger still
-  // produces a sane origin.
-  const origin = `${clamp(triggerX - panel.left, 0, panel.width)}px ${clamp(
-    triggerY - panel.top,
-    0,
-    panel.height,
-  )}px`;
-  // A light pull towards the card — enough to read as motion, not a fly-in.
-  const dx = (triggerX - (panel.left + panel.width / 2)) * 0.12;
-  const dy = (triggerY - (panel.top + panel.height / 2)) * 0.12;
-
-  return { origin, transform: `translate(${dx}px, ${dy}px) scale(0.86)` };
+function unpin(surface: HTMLElement, content: HTMLElement) {
+  for (const property of [
+    "position",
+    "top",
+    "left",
+    "width",
+    "height",
+    "maxWidth",
+    "maxHeight",
+    "margin",
+    "transform",
+  ] as const) {
+    surface.style[property] = "";
+    content.style[property] = "";
+  }
 }
 
 export default function ProductDetailDialog({
   product,
   detail,
+  originRef,
   triggerRef,
   onClose,
 }: {
   product: Product;
   detail: ProductDetail;
-  /** Button that opened the sheet — the motion origin and focus to restore. */
+  /** The product card — the surface this sheet grows out of and back into. */
+  originRef: RefObject<HTMLElement>;
+  /** Button that opened the sheet; focus returns here. */
   triggerRef: RefObject<HTMLElement>;
   onClose: () => void;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
-  const triggerRect = useRef<DOMRect | null>(null);
+  /** The sheet's resting geometry, kept so the content can stay frozen at it. */
+  const sheetBox = useRef<Surface | null>(null);
+  const pinned = useRef(false);
   const closing = useRef(false);
   const titleId = useId();
 
-  /** Play the exit animation, then let the parent unmount us. */
+  /** Collapse the surface back into the card, then let the parent unmount us. */
   const close = useCallback(() => {
     if (closing.current) return;
     closing.current = true;
 
-    const panel = panelRef.current;
+    const surface = surfaceRef.current;
+    const content = contentRef.current;
     const backdrop = backdropRef.current;
-    if (!panel || !backdrop) {
+    if (!surface || !content || !backdrop) {
       onClose();
       return;
     }
 
-    const reduced = prefersReducedMotion();
-    const duration = reduced ? REDUCED_MS : CLOSE_MS;
-    const options: KeyframeAnimationOptions = {
+    if (prefersReducedMotion()) {
+      backdrop.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration: REDUCED_MS,
+        fill: "forwards",
+      });
+      const fade = surface.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration: REDUCED_MS,
+        fill: "forwards",
+      });
+      fade.onfinish = onClose;
+      return;
+    }
+
+    // Start from wherever the surface is *right now*, so closing mid-open
+    // reverses from that point instead of jumping to the finished size.
+    const from = readSurface(surface);
+    const sheet = (pinned.current ? sheetBox.current : readSurface(surface)) ?? from;
+    for (const element of [surface, content, backdrop]) {
+      element.getAnimations().forEach((animation) => animation.cancel());
+    }
+    pin(surface, content, from, sheet);
+    pinned.current = true;
+
+    const origin = originRef.current;
+    const target = origin ? readSurface(origin) : shrinkSurface(sheet);
+    const { easing, duration } = spring(CLOSE_SPRING);
+    const handover = Math.min(HANDOVER_MS, Math.round(duration * 0.5));
+
+    backdrop.animate([{ opacity: 1 }, { opacity: 0 }], {
       duration,
-      easing: EASE_IN,
+      easing: "ease-in",
       fill: "forwards",
-    };
-    const { transform } = collapsedTransform(
-      panel.getBoundingClientRect(),
-      triggerRect.current,
-    );
-
-    backdrop.animate([{ opacity: 1 }, { opacity: 0 }], options);
-    const exit = panel.animate(
-      reduced
-        ? [{ opacity: 1 }, { opacity: 0 }]
-        : [
-            { transform: "none", opacity: 1 },
-            { transform, opacity: 0 },
-          ],
-      options,
-    );
-    exit.onfinish = onClose;
-  }, [onClose]);
-
-  // Entrance. Runs before paint so the panel is never seen at its final size.
-  useLayoutEffect(() => {
-    const panel = panelRef.current;
-    const backdrop = backdropRef.current;
-    if (!panel || !backdrop) return;
-
-    triggerRect.current = triggerRef.current?.getBoundingClientRect() ?? null;
-
-    const reduced = prefersReducedMotion();
-    const duration = reduced ? REDUCED_MS : OPEN_MS;
-    const options: KeyframeAnimationOptions = {
+    });
+    surface.animate([surfaceKeyframe(from), surfaceKeyframe(target)], {
       duration,
-      easing: reduced ? "ease-out" : EASE_OUT,
+      easing,
+      fill: "forwards",
+    });
+    content.animate([{ opacity: 1 }, { opacity: 0 }], {
+      duration: CONTENT_OUT_MS,
+      easing: "ease-in",
+      fill: "forwards",
+    });
+    // The surface itself only gives way at the very end, once it is back at
+    // card size and the card behind it can take over unnoticed.
+    const fade = surface.animate([{ opacity: 1 }, { opacity: 0 }], {
+      duration: handover,
+      delay: duration - handover,
+      easing: "ease-in",
+      fill: "forwards",
+    });
+    fade.onfinish = onClose;
+  }, [onClose, originRef]);
+
+  // Grow out of the card. Runs before paint, so the sheet is never seen at its
+  // final size first.
+  useLayoutEffect(() => {
+    const surface = surfaceRef.current;
+    const content = contentRef.current;
+    const backdrop = backdropRef.current;
+    if (!surface || !content || !backdrop) return;
+
+    // Lock first, measure second: compensating for the scrollbar nudges the
+    // centred page, and the card's box has to be read after that settles.
+    const unlock = lockPageScroll();
+    const reduced = prefersReducedMotion();
+
+    // Leave no trace behind: the effect has to be re-runnable, or a second
+    // pass would measure the surface mid-morph and animate it to itself.
+    const reset = () => {
+      unlock();
+      for (const element of [surface, content, backdrop]) {
+        element.getAnimations().forEach((animation) => animation.cancel());
+      }
+      unpin(surface, content);
+      pinned.current = false;
+    };
+
+    backdrop.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: reduced ? REDUCED_MS : BACKDROP_MS,
+      easing: "ease-out",
       fill: "backwards",
-    };
-    const { origin, transform } = collapsedTransform(
-      panel.getBoundingClientRect(),
-      triggerRect.current,
+    });
+
+    if (reduced) {
+      surface.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: REDUCED_MS,
+        easing: "ease-out",
+        fill: "backwards",
+      });
+      return reset;
+    }
+
+    const sheet = readSurface(surface);
+    const origin = originRef.current;
+    const from = origin ? readSurface(origin) : shrinkSurface(sheet);
+
+    sheetBox.current = sheet;
+    pin(surface, content, sheet, sheet);
+    pinned.current = true;
+
+    const { easing, duration } = spring(OPEN_SPRING);
+    const geometry = surface.animate(
+      [surfaceKeyframe(from), surfaceKeyframe(sheet)],
+      { duration, easing, fill: "backwards" },
     );
+    // A short hand-over from the card underneath — not a fade-in. By the time
+    // the surface has grown noticeably it is already solid.
+    surface.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: HANDOVER_MS,
+      easing: "ease-out",
+      fill: "backwards",
+    });
+    content.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: CONTENT_IN_MS,
+      delay: 70,
+      easing: "ease-out",
+      fill: "backwards",
+    });
 
-    backdrop.animate([{ opacity: 0 }, { opacity: 1 }], options);
-    panel.style.transformOrigin = origin;
-    panel.animate(
-      reduced
-        ? [{ opacity: 0 }, { opacity: 1 }]
-        : [
-            { transform, opacity: 0 },
-            { transform: "none", opacity: 1 },
-          ],
-      options,
-    );
-  }, [triggerRef]);
+    // Once at rest, hand the geometry back to the stylesheet so the sheet stays
+    // responsive to viewport changes.
+    geometry.finished
+      .then(() => {
+        if (closing.current) return;
+        unpin(surface, content);
+        pinned.current = false;
+      })
+      .catch(() => {
+        /* cancelled by an early close */
+      });
 
-  // Freeze the page behind the sheet, compensating for the scrollbar so the
-  // layout does not jump. In RTL the browser may park it on the left.
-  useEffect(() => {
-    const { body, documentElement: root } = document;
-    const gutter = window.innerWidth - root.clientWidth;
-    const side =
-      root.getBoundingClientRect().left > 0 ? "paddingLeft" : "paddingRight";
-    const previous = { overflow: body.style.overflow, pad: body.style[side] };
-
-    body.style.overflow = "hidden";
-    if (gutter > 0) body.style[side] = `${gutter}px`;
-
-    return () => {
-      body.style.overflow = previous.overflow;
-      body.style[side] = previous.pad;
-    };
-  }, []);
+    return reset;
+  }, [originRef]);
 
   // Move focus into the sheet, keep it there, and hand it back on close.
   useEffect(() => {
     const restoreTo = triggerRef.current;
-    panelRef.current?.focus({ preventScroll: true });
+    surfaceRef.current?.focus({ preventScroll: true });
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -175,9 +300,9 @@ export default function ProductDetailDialog({
       }
       if (event.key !== "Tab") return;
 
-      const panel = panelRef.current;
-      if (!panel) return;
-      const stops = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
+      const surface = surfaceRef.current;
+      if (!surface) return;
+      const stops = Array.from(surface.querySelectorAll<HTMLElement>(FOCUSABLE));
       if (stops.length === 0) {
         event.preventDefault();
         return;
@@ -187,7 +312,7 @@ export default function ProductDetailDialog({
       const last = stops[stops.length - 1];
       const active = document.activeElement;
 
-      if (event.shiftKey && (active === first || active === panel)) {
+      if (event.shiftKey && (active === first || active === surface)) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && active === last) {
@@ -209,7 +334,15 @@ export default function ProductDetailDialog({
   const context = [product.category, product.size].filter(Boolean).join(" · ");
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+      style={
+        {
+          "--accent": detail.accent.base,
+          "--accent-soft": detail.accent.soft,
+        } as CSSProperties
+      }
+    >
       <div
         ref={backdropRef}
         onClick={close}
@@ -217,115 +350,112 @@ export default function ProductDetailDialog({
         className="absolute inset-0 bg-ink/45 backdrop-blur-md"
       />
 
+      {/* The morphing surface: box, corners and shadow all interpolate. */}
       <div
-        ref={panelRef}
+        ref={surfaceRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        style={
-          {
-            "--accent": detail.accent.base,
-            "--accent-soft": detail.accent.soft,
-          } as CSSProperties
-        }
-        className="relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-gold/25 bg-cream shadow-soft outline-none"
+        className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-gold/25 bg-cream shadow-soft outline-none"
       >
-        <button
-          type="button"
-          onClick={close}
-          aria-label="סגירה"
-          className="absolute left-5 top-5 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-gold/25 bg-white/70 text-ink/60 backdrop-blur transition-all duration-300 hover:bg-white hover:text-ink active:scale-95 sm:left-7 sm:top-7"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            aria-hidden="true"
+        <div ref={contentRef} className="relative flex max-h-[88vh] w-full flex-col">
+          <button
+            type="button"
+            onClick={close}
+            aria-label="סגירה"
+            className="absolute left-5 top-5 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-gold/25 bg-white/70 text-ink/60 backdrop-blur transition-all duration-300 hover:bg-white hover:text-ink active:scale-95 sm:left-7 sm:top-7"
           >
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
-
-        {/* Sheet head — centred like the printed page it comes from. */}
-        <header className="relative shrink-0 overflow-hidden border-b border-gold/15 px-7 pb-8 pt-9 text-center sm:px-12 sm:pb-9 sm:pt-11">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[color:var(--accent-soft)] via-[color:var(--accent-soft)] to-transparent opacity-60"
-          />
-          <BotanicalMark
-            className="pointer-events-none absolute -top-8 right-2 h-48 w-28 text-[color:var(--accent)] opacity-[0.08]"
-          />
-          <BotanicalMark
-            flip
-            className="pointer-events-none absolute -bottom-16 left-2 h-48 w-28 text-[color:var(--accent)] opacity-[0.06]"
-          />
-
-          <div className="relative">
-            <p className="text-[10px] font-semibold tracking-[0.35em] text-[color:var(--accent)]">
-              {sheetBlessing.opening}
-            </p>
-            <p className="mt-2 font-serif text-sm leading-relaxed text-ink/55">
-              {sheetBlessing.verse}
-            </p>
-
-            <Ornament className="my-5" />
-
-            <h2
-              id={titleId}
-              className="font-serif text-2xl font-bold leading-snug text-deep-green sm:text-[2rem]"
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              aria-hidden="true"
             >
-              {detail.title}
-            </h2>
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
 
-            {detail.subtitle && (
-              <p className="mt-3 font-serif text-lg text-[color:var(--accent)]">
-                {detail.subtitle}
-              </p>
-            )}
-
-            {context && (
-              <p className="mt-4 text-[11px] tracking-[0.15em] text-ink/45">
-                {context}
-              </p>
-            )}
-          </div>
-        </header>
-
-        {/* Focusable so the sheet can be scrolled from the keyboard alone. */}
-        <div
-          tabIndex={0}
-          className="relative flex-1 overflow-y-auto overscroll-contain px-7 py-9 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold/40 sm:px-12 sm:py-10"
-        >
-          {detail.sections.map((section, index) => (
-            <Section
-              key={section.title ?? `untitled-${index}`}
-              section={section}
-              lede={index === 0 && !section.title}
-              delayMs={120 + index * 70}
+          {/* Sheet head — centred like the printed page it comes from. */}
+          <header className="relative shrink-0 overflow-hidden border-b border-gold/15 px-7 pb-8 pt-9 text-center sm:px-12 sm:pb-9 sm:pt-11">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[color:var(--accent-soft)] via-[color:var(--accent-soft)] to-transparent opacity-60"
             />
-          ))}
+            <BotanicalMark
+              className="pointer-events-none absolute -top-8 right-2 h-48 w-28 text-[color:var(--accent)] opacity-[0.08]"
+            />
+            <BotanicalMark
+              flip
+              className="pointer-events-none absolute -bottom-16 left-2 h-48 w-28 text-[color:var(--accent)] opacity-[0.06]"
+            />
 
-          <footer
-            className="detail-reveal mt-12 animate-fade-up border-t border-gold/20 pt-8 text-center"
-            style={{ animationDelay: `${160 + detail.sections.length * 70}ms` }}
+            <div className="relative">
+              <p className="text-[10px] font-semibold tracking-[0.35em] text-[color:var(--accent)]">
+                {sheetBlessing.opening}
+              </p>
+              <p className="mt-2 font-serif text-sm leading-relaxed text-ink/55">
+                {sheetBlessing.verse}
+              </p>
+
+              <Ornament className="my-5" />
+
+              <h2
+                id={titleId}
+                className="font-serif text-2xl font-bold leading-snug text-deep-green sm:text-[2rem]"
+              >
+                {detail.title}
+              </h2>
+
+              {detail.subtitle && (
+                <p className="mt-3 font-serif text-lg text-[color:var(--accent)]">
+                  {detail.subtitle}
+                </p>
+              )}
+
+              {context && (
+                <p className="mt-4 text-[11px] tracking-[0.15em] text-ink/45">
+                  {context}
+                </p>
+              )}
+            </div>
+          </header>
+
+          {/* Focusable so the sheet can be scrolled from the keyboard alone. */}
+          <div
+            tabIndex={0}
+            className="relative flex-1 overflow-y-auto overscroll-contain px-7 py-9 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold/40 sm:px-12 sm:py-10"
           >
-            <p className="mx-auto max-w-md text-[11px] leading-relaxed text-ink/45">
-              {site.disclaimer}
-            </p>
+            {detail.sections.map((section, index) => (
+              <Section
+                key={section.title ?? `untitled-${index}`}
+                section={section}
+                lede={index === 0 && !section.title}
+                delayMs={140 + index * 60}
+              />
+            ))}
 
-            <Ornament className="my-6" />
+            <footer
+              className="detail-reveal mt-12 animate-fade-up border-t border-gold/20 pt-8 text-center"
+              style={{ animationDelay: `${180 + detail.sections.length * 60}ms` }}
+            >
+              <p className="mx-auto max-w-md text-[11px] leading-relaxed text-ink/45">
+                {site.disclaimer}
+              </p>
 
-            <p className="font-serif text-lg text-[color:var(--accent)]">
-              {sheetBlessing.closing}
-            </p>
-            <p className="mt-3 text-xs text-ink/50">
-              {site.owner} · {site.phoneDisplay}
-            </p>
-          </footer>
+              <Ornament className="my-6" />
+
+              <p className="font-serif text-lg text-[color:var(--accent)]">
+                {sheetBlessing.closing}
+              </p>
+              <p className="mt-3 text-xs text-ink/50">
+                {site.owner} · {site.phoneDisplay}
+              </p>
+            </footer>
+          </div>
         </div>
       </div>
     </div>,
